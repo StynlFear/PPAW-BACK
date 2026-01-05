@@ -1,0 +1,1691 @@
+openapi: 3.0.3
+info:
+  title: PPAW Backend API
+  version: 0.1.0
+  description: |
+    Minimal API for local testing:
+    - Create user
+    - Assign default Free plan on user creation
+    - List plans
+    - Link plans to filters
+    - Set a user's current plan
+    - Upload image
+    - List filters
+    - Apply filter to an image
+    - Create/list watermark presets
+    - Apply/list/remove watermarks on an image
+servers:
+  - url: http://localhost:3000
+
+tags:
+  - name: Auth
+  - name: Users
+  - name: Images
+  - name: Filters
+  - name: Plans
+  - name: Watermarks
+  - name: Reports
+
+paths:
+  /me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      description: Returns the authenticated user's profile (based on the Bearer JWT).
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+          description: Bearer <token>
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register (email/password)
+      description: Creates a user profile, stores a password hash, and returns a JWT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login (email/password)
+      description: Verifies credentials and returns a JWT.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users:
+    post:
+      tags: [Users]
+      summary: Create a user profile
+      description: Creates a user profile and assigns the default Free plan. The DB may auto-generate id; if not, backend may generate one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+            examples:
+              minimal:
+                value:
+                  email: test@example.com
+              full:
+                value:
+                  email: test@example.com
+                  name: Test User
+                  avatarUrl: https://example.com/avatar.png
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/{userId}/plan:
+    get:
+      tags: [Users]
+      summary: Get a user's current plan
+      description: Returns the user's active subscription including the plan details.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionWithPlan'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User has no active subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Users]
+      summary: Set a user's current plan
+      description: Cancels any active subscription and creates a new active one.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetUserPlanRequest'
+            examples:
+              setToGold:
+                value:
+                  planId: 4
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User or plan not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/{userId}/quota:
+    get:
+      tags: [Users]
+      summary: Get current upload quota usage
+      description: Returns this month's usage, plan limits, and remaining quota.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserQuota'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User has no active subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /plans:
+    get:
+      tags: [Plans]
+      summary: List subscription plans
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SubscriptionPlan'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /plans/{planId}/filters:
+    get:
+      tags: [Plans]
+      summary: List filters linked to a plan
+      parameters:
+        - in: path
+          name: planId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Filter'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags: [Plans]
+      summary: Replace filters linked to a plan
+      description: Replaces the entire plan→filters mapping.
+      parameters:
+        - in: path
+          name: planId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplacePlanFiltersRequest'
+            examples:
+              basic:
+                value:
+                  filterIds: [1, 2, 4]
+      responses:
+        '204':
+          description: Updated
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Plan or filter not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /images/upload:
+    post:
+      tags: [Images]
+      summary: Upload a photo
+      description: Uploads a file to Supabase Storage and creates an Image row.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [userId, file]
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Image'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Monthly quota exceeded (images or storage)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User has no active subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /filters:
+    get:
+      tags: [Filters]
+      summary: List available filters
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Filter'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /filters/{userId}:
+    get:
+      tags: [Filters]
+      summary: List filters allowed for a user
+      description: Returns only filters linked to the user's active subscription plan.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Filter'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User has no active subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /images/{imageId}/filters:
+    get:
+      tags: [Images]
+      summary: Get latest applied filters for an image
+      description: Returns the latest filter stack (including per-filter intensity).
+      parameters:
+        - in: path
+          name: imageId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImageFilter'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Image not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Images]
+      summary: Apply filters to an image
+      description: Creates an ImageVersion and stores the full filter stack (each filter can have its own intensity).
+      parameters:
+        - in: path
+          name: imageId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyFilterRequest'
+            examples:
+              basic:
+                value:
+                  filterId: 1
+              withIntensity:
+                value:
+                  filterId: 2
+                  intensity: 70
+              multiple:
+                value:
+                  filterId: [1, 2]
+              multipleWithIntensity:
+                value:
+                  filterId: [1, 2]
+                  intensity: [30, 80]
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyFilterResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Filter not allowed for user's subscription plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Image or filter not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User has no active subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /images/{imageId}/filters/history:
+    get:
+      tags: [Images]
+      summary: Get filter history for an image
+      description: Returns image versions with a snapshot of the full filter stack in metadata.
+      parameters:
+        - in: path
+          name: imageId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImageVersion'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Image not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /images/{imageId}/filters/{filterId}:
+    delete:
+      tags: [Images]
+      summary: Remove an applied filter from an image
+      description: Removes the latest application of the given filter for the image (keeps image version history for rollback).
+      parameters:
+        - in: path
+          name: imageId
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: filterId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Applied filter not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /watermarks:
+    get:
+      tags: [Watermarks]
+      summary: List watermark presets
+      parameters:
+        - in: query
+          name: userId
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Optional. If provided, returns only presets owned by this user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WatermarkPreset'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Watermarks not allowed for user's subscription plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User has no active subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags: [Watermarks]
+      summary: Create a watermark preset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWatermarkPresetRequest'
+            examples:
+              basic:
+                value:
+                  userId: 00000000-0000-0000-0000-000000000000
+                  presetName: My Brand
+                  text: "© MyBrand"
+              full:
+                value:
+                  userId: 00000000-0000-0000-0000-000000000000
+                  presetName: Footer
+                  text: "@mybrand"
+                  position: bottom-right
+                  opacity: 70
+                  font: Inter
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatermarkPreset'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Watermarks not allowed for user's subscription plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User has no active subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /images/{imageId}/watermarks:
+    post:
+      tags: [Images]
+      summary: Apply watermarks to an image
+      description: Creates an ImageVersion and applies a watermark preset by id.
+      parameters:
+        - in: path
+          name: imageId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyWatermarkRequest'
+            examples:
+              basic:
+                value:
+                  watermarkId: 1
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyWatermarkResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Watermarks not allowed for user's subscription plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Image or preset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User has no active subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags: [Images]
+      summary: Get latest watermarks for an image
+      parameters:
+        - in: path
+          name: imageId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImageVersionWatermark'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Watermarks not allowed for user's subscription plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Image not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User has no active subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /images/{imageId}/watermarks/history:
+    get:
+      tags: [Images]
+      summary: Get watermark history for an image
+      description: Returns image versions (newest first). Watermark history is stored in ImageVersion.metadata.
+      parameters:
+        - in: path
+          name: imageId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImageVersion'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Watermarks not allowed for user's subscription plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Image not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User has no active subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /images/{imageId}/watermarks/{watermarkId}:
+    delete:
+      tags: [Images]
+      summary: Remove an applied watermark from an image
+      description: Removes the latest application of the given watermark for the image (keeps image version history).
+      parameters:
+        - in: path
+          name: imageId
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: path
+          name: watermarkId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Watermarks not allowed for user's subscription plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Applied watermark not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User has no active subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /reports:
+    get:
+      tags: [Reports]
+      summary: List generated reports
+      parameters:
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: type
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Report'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /reports/generate:
+    post:
+      tags: [Reports]
+      summary: Generate an activity report for a selected period
+      description: |
+        Generates a report for the requested period (day/week/month/year), optionally anchored to a specific UTC date.
+        The report is stored in the reports table and returned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateReportRequest'
+            examples:
+              globalMonth:
+                value:
+                  userId: 11111111-1111-4111-8111-111111111111
+                  period: month
+                  date: '2026-01-02'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    GenerateReportRequest:
+      type: object
+      required: [userId, period]
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: Admin user generating the report (used for audit + report record ownership).
+        period:
+          type: string
+          enum: [day, week, month, year]
+        date:
+          type: string
+          description: Optional UTC anchor date in YYYY-MM-DD.
+          example: '2026-01-02'
+
+    Report:
+      type: object
+      required: [id, userId, type, data]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          example: global_activity
+        data:
+          description: JSON report payload
+          oneOf:
+            - type: object
+            - type: array
+            - type: string
+            - type: number
+            - type: boolean
+        generatedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ImageVersion:
+      type: object
+      required: [id, imageId, editedUrl]
+      properties:
+        id:
+          type: string
+          format: uuid
+        imageId:
+          type: string
+          format: uuid
+        editedUrl:
+          type: string
+        metadata:
+          nullable: true
+          description: JSON blob
+          oneOf:
+            - type: object
+            - type: array
+            - type: string
+            - type: number
+            - type: boolean
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    CreateUserRequest:
+      type: object
+      required: [email]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Optional. If provided, must be a UUID.
+        email:
+          type: string
+          example: test@example.com
+        role:
+          type: string
+          enum: [user, admin]
+          description: Optional. Defaults to user.
+        name:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          example: test@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+        name:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          example: test@example.com
+        password:
+          type: string
+          format: password
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+          description: Bearer JWT access token
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      required: [id, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    SubscriptionPlan:
+      type: object
+      required: [id, name, price, period]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        price:
+          type: string
+          description: Decimal serialized as string by Prisma/JSON
+        period:
+          type: string
+          example: monthly
+        limitsJson:
+          nullable: true
+          description: JSON blob
+          oneOf:
+            - type: object
+            - type: array
+            - type: string
+            - type: number
+            - type: boolean
+        featuresJson:
+          nullable: true
+          description: JSON blob
+          oneOf:
+            - type: object
+            - type: array
+            - type: string
+            - type: number
+            - type: boolean
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    Subscription:
+      type: object
+      required: [id, userId, planId, status, currentPeriodStart, currentPeriodEnd]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+          format: uuid
+        planId:
+          type: integer
+        status:
+          type: string
+        currentPeriodStart:
+          type: string
+          format: date-time
+        currentPeriodEnd:
+          type: string
+          format: date-time
+        externalCustomerId:
+          type: string
+          nullable: true
+        externalSubscriptionId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    SubscriptionWithPlan:
+      allOf:
+        - $ref: '#/components/schemas/Subscription'
+        - type: object
+          required: [plan]
+          properties:
+            plan:
+              $ref: '#/components/schemas/SubscriptionPlan'
+
+    ReplacePlanFiltersRequest:
+      type: object
+      required: [filterIds]
+      properties:
+        filterIds:
+          type: array
+          items:
+            type: integer
+
+    SetUserPlanRequest:
+      type: object
+      required: [planId]
+      properties:
+        planId:
+          type: integer
+
+    UserQuota:
+      type: object
+      required: [plan, window, limits, usage, remaining]
+      properties:
+        plan:
+          type: object
+          required: [id, name]
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+        window:
+          type: object
+          required: [from, to]
+          properties:
+            from:
+              type: string
+              format: date-time
+            to:
+              type: string
+              format: date-time
+        limits:
+          type: object
+          required: [maxImagesPerMonth, maxStorageMbPerMonth, maxStorageBytesPerMonth]
+          properties:
+            maxImagesPerMonth:
+              type: integer
+              nullable: true
+            maxStorageMbPerMonth:
+              type: integer
+              nullable: true
+            maxStorageBytesPerMonth:
+              type: string
+              nullable: true
+              description: BigInt serialized as string by Prisma/JSON
+        usage:
+          type: object
+          required: [imagesThisMonth, storageBytesThisMonth]
+          properties:
+            imagesThisMonth:
+              type: integer
+            storageBytesThisMonth:
+              type: string
+              description: BigInt serialized as string by Prisma/JSON
+        remaining:
+          type: object
+          required: [imagesThisMonth, storageBytesThisMonth]
+          properties:
+            imagesThisMonth:
+              type: integer
+              nullable: true
+            storageBytesThisMonth:
+              type: string
+              nullable: true
+              description: BigInt serialized as string by Prisma/JSON
+
+    Image:
+      type: object
+      required: [id, userId, originalUrl]
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        originalUrl:
+          type: string
+          format: uri
+          description: Public URL to the original uploaded image (Supabase Storage)
+        sizeBytes:
+          type: string
+          description: BigInt serialized as string by Prisma/JSON
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    Filter:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        intensityRange:
+          nullable: true
+          description: JSON blob
+          oneOf:
+            - type: object
+            - type: array
+            - type: string
+            - type: number
+            - type: boolean
+        isPremium:
+          type: boolean
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ApplyFilterRequest:
+      oneOf:
+        - type: object
+          required: [filterId]
+          properties:
+            filterId:
+              type: integer
+            intensity:
+              type: integer
+              minimum: 0
+              maximum: 100
+              default: 100
+        - type: object
+          required: [filterId]
+          properties:
+            filterId:
+              type: array
+              minItems: 1
+              items:
+                type: integer
+            intensity:
+              description: Either a single intensity applied to all filters, or an array matching filterId length.
+              oneOf:
+                - type: integer
+                  minimum: 0
+                  maximum: 100
+                  default: 100
+                - type: array
+                  minItems: 1
+                  items:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+
+    FilterStackItem:
+      type: object
+      required: [filterId]
+      properties:
+        filterId:
+          type: integer
+        intensity:
+          type: integer
+          minimum: 0
+          maximum: 100
+          default: 100
+
+    ImageFilter:
+      type: object
+      required: [imageVersionId, filterId]
+      properties:
+        imageVersionId:
+          type: string
+          format: uuid
+        filterId:
+          type: integer
+        intensity:
+          type: integer
+          nullable: true
+        sortOrder:
+          type: integer
+          default: 0
+        appliedAt:
+          type: string
+          format: date-time
+          nullable: true
+        filter:
+          $ref: '#/components/schemas/Filter'
+
+    ApplyFilterResponse:
+      type: object
+      required: [version, links]
+      properties:
+        version:
+          type: object
+          required: [id, imageId, editedUrl]
+          properties:
+            id:
+              type: string
+              format: uuid
+            imageId:
+              type: string
+              format: uuid
+            editedUrl:
+              type: string
+            metadata:
+              nullable: true
+              description: JSON blob
+              oneOf:
+                - type: object
+                - type: array
+                - type: string
+                - type: number
+                - type: boolean
+            createdAt:
+              type: string
+              format: date-time
+              nullable: true
+        link:
+          nullable: true
+          $ref: '#/components/schemas/ImageFilter'
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImageFilter'
+
+    WatermarkPreset:
+      type: object
+      required: [id, userId, presetName, position, opacity]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+          format: uuid
+        presetName:
+          type: string
+        text:
+          type: string
+          nullable: true
+        position:
+          type: string
+          description: Free-form position label (e.g. bottom-right, top-left).
+        opacity:
+          type: integer
+          minimum: 0
+          maximum: 100
+        font:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreateWatermarkPresetRequest:
+      type: object
+      required: [userId, presetName]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        presetName:
+          type: string
+        text:
+          type: string
+          nullable: true
+        position:
+          type: string
+          default: bottom-right
+        opacity:
+          type: integer
+          minimum: 0
+          maximum: 100
+          default: 60
+        font:
+          type: string
+          default: Inter
+
+    ApplyWatermarkRequest:
+      type: object
+      required: [watermarkId]
+      properties:
+        watermarkId:
+          type: integer
+
+    ImageVersionWatermark:
+      type: object
+      required: [id, imageVersionId, text, position, opacity, font, sortOrder]
+      properties:
+        id:
+          type: integer
+        imageVersionId:
+          type: string
+          format: uuid
+        watermarkId:
+          type: integer
+          nullable: true
+          description: Nullable when placement was not created from a preset.
+        text:
+          type: string
+        position:
+          type: string
+        opacity:
+          type: integer
+          minimum: 0
+          maximum: 100
+        font:
+          type: string
+        sortOrder:
+          type: integer
+        appliedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ApplyWatermarkResponse:
+      type: object
+      required: [version, placement]
+      properties:
+        version:
+          $ref: '#/components/schemas/ImageVersion'
+        placement:
+          $ref: '#/components/schemas/ImageVersionWatermark'

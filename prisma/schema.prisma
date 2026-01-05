@@ -1,0 +1,261 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // For Supabase, you can point DATABASE_URL at the pooled (PgBouncer) connection string.
+  // Use DIRECT_URL for migrations/introspection against the direct Postgres endpoint.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model UserProfile {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String   @db.VarChar
+  role      String   @default("user") @db.VarChar
+  name      String?  @db.VarChar
+  avatarUrl String?  @map("avatar_url") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  authCredential AuthCredential?
+
+  entitlements  Entitlement[]
+  images        Image[]
+  payments      Payment[]
+  purchases     Purchase[]
+  reports       Report[]
+  subscriptions Subscription[]
+  watermarks    Watermark[]
+
+  @@map("user_profiles")
+}
+
+model AuthCredential {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @unique @map("user_id") @db.Uuid
+  email        String   @unique @db.VarChar
+  passwordHash String   @map("password_hash") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auth_credentials")
+}
+
+model SubscriptionPlan {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique @db.VarChar
+  price        Decimal  @default(0)
+  period       String   @default("monthly") @db.VarChar
+  limitsJson   Json?    @map("limits_json")
+  featuresJson Json?    @map("features_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  products      Product[]
+  subscriptions Subscription[]
+  planFilters   SubscriptionPlanFilter[]
+
+  @@map("subscription_plans")
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  // SQL shows USER-DEFINED; exact enum values/type name aren't provided.
+  // Keep as String to avoid guessing. You can later switch to a Prisma enum once values are known.
+  type        String
+  planId      Int?     @map("plan_id")
+  sku         String   @unique @db.VarChar
+  price       Decimal
+  currency    String   @default("EUR") @db.VarChar
+  isRecurring Boolean  @default(false) @map("is_recurring")
+  period      String?  @db.VarChar
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  plan        SubscriptionPlan? @relation(fields: [planId], references: [id])
+  entitlements Entitlement[]
+  purchases    Purchase[]
+
+  @@map("products")
+}
+
+model Entitlement {
+  id            Int       @id @default(autoincrement())
+  userId        String    @map("user_id") @db.Uuid
+  productId     Int       @map("product_id")
+  effectiveFrom DateTime  @default(now()) @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to")
+  payload       Json?
+  createdAt     DateTime? @default(now()) @map("created_at")
+
+  user    UserProfile @relation(fields: [userId], references: [id])
+  product Product     @relation(fields: [productId], references: [id])
+
+  @@map("entitlements")
+}
+
+model Filter {
+  id             Int      @id @default(autoincrement())
+  name           String   @unique @db.VarChar
+  description    String?  @db.Text
+  intensityRange Json?    @map("intensity_range")
+  isPremium      Boolean? @default(false) @map("is_premium")
+  createdAt      DateTime? @default(now()) @map("created_at")
+
+  imageFilters ImageFilter[]
+  planFilters  SubscriptionPlanFilter[]
+
+  @@map("filters")
+}
+
+model Image {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  originalUrl String   @map("original_url") @db.Text
+  sizeBytes   BigInt?  @map("size_bytes")
+  createdAt   DateTime? @default(now()) @map("created_at")
+
+  user     UserProfile   @relation(fields: [userId], references: [id])
+  versions ImageVersion[]
+
+  @@map("images")
+}
+
+model ImageVersion {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  imageId   String   @map("image_id") @db.Uuid
+  editedUrl String   @map("edited_url") @db.Text
+  metadata  Json?
+  createdAt DateTime? @default(now()) @map("created_at")
+
+  image        Image         @relation(fields: [imageId], references: [id])
+  imageFilters ImageFilter[]
+  watermarks   ImageVersionWatermark[]
+
+  @@map("image_versions")
+}
+
+model ImageFilter {
+  imageVersionId String   @map("image_version_id") @db.Uuid
+  filterId       Int      @map("filter_id")
+  intensity      Int?
+  sortOrder      Int      @default(0) @map("sort_order")
+  appliedAt      DateTime? @default(now()) @map("applied_at")
+
+  imageVersion ImageVersion @relation(fields: [imageVersionId], references: [id])
+  filter       Filter       @relation(fields: [filterId], references: [id])
+
+  @@id([imageVersionId, filterId])
+  @@index([imageVersionId, sortOrder])
+  @@map("image_filters")
+}
+
+model Purchase {
+  id          Int      @id @default(autoincrement())
+  userId      String   @map("user_id") @db.Uuid
+  productId   Int      @map("product_id")
+  quantity    Int      @default(1)
+  totalAmount Decimal  @map("total_amount")
+  status      String   @default("paid") @db.VarChar
+  createdAt   DateTime? @default(now()) @map("created_at")
+
+  user     UserProfile @relation(fields: [userId], references: [id])
+  product  Product     @relation(fields: [productId], references: [id])
+  payments Payment[]
+
+  @@map("purchases")
+}
+
+model Subscription {
+  id                   Int      @id @default(autoincrement())
+  userId               String   @map("user_id") @db.Uuid
+  planId               Int      @map("plan_id")
+  status               String   @default("active") @db.VarChar
+  currentPeriodStart   DateTime @default(now()) @map("current_period_start")
+  currentPeriodEnd     DateTime @map("current_period_end")
+  externalCustomerId   String?  @map("external_customer_id") @db.VarChar
+  externalSubscriptionId String? @map("external_subscription_id") @db.VarChar
+  createdAt            DateTime? @default(now()) @map("created_at")
+
+  user     UserProfile      @relation(fields: [userId], references: [id])
+  plan     SubscriptionPlan @relation(fields: [planId], references: [id])
+  payments Payment[]
+
+  @@map("subscriptions")
+}
+
+model Payment {
+  id             Int      @id @default(autoincrement())
+  userId         String   @map("user_id") @db.Uuid
+  purchaseId     Int?     @map("purchase_id")
+  subscriptionId Int?     @map("subscription_id")
+  amount         Decimal
+  currency       String   @default("EUR") @db.VarChar
+  method         String?  @db.VarChar
+  status         String   @db.VarChar
+  createdAt      DateTime? @default(now()) @map("created_at")
+
+  user         UserProfile   @relation(fields: [userId], references: [id])
+  purchase     Purchase?     @relation(fields: [purchaseId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@map("payments")
+}
+
+model Report {
+  id          Int      @id @default(autoincrement())
+  userId      String   @map("user_id") @db.Uuid
+  type        String   @db.VarChar
+  data        Json
+  generatedAt DateTime? @default(now()) @map("generated_at")
+
+  user UserProfile @relation(fields: [userId], references: [id])
+
+  @@map("reports")
+}
+
+model Watermark {
+  id         Int      @id @default(autoincrement())
+  userId     String   @map("user_id") @db.Uuid
+  presetName String   @map("preset_name") @db.VarChar
+  text       String?  @db.VarChar
+  position   String   @default("bottom-right") @db.VarChar
+  opacity    Int      @default(60)
+  font       String?  @default("Inter") @db.VarChar
+  createdAt  DateTime? @default(now()) @map("created_at")
+
+  user UserProfile @relation(fields: [userId], references: [id])
+  placements ImageVersionWatermark[]
+
+  @@map("watermarks")
+}
+
+model ImageVersionWatermark {
+  id             Int      @id @default(autoincrement())
+  imageVersionId String   @map("image_version_id") @db.Uuid
+  watermarkId    Int?     @map("watermark_id")
+  text           String   @db.VarChar
+  position       String   @db.VarChar
+  opacity        Int      @default(60)
+  font           String   @default("Inter") @db.VarChar
+  sortOrder      Int      @default(0) @map("sort_order")
+  appliedAt      DateTime? @default(now()) @map("applied_at")
+
+  imageVersion ImageVersion @relation(fields: [imageVersionId], references: [id], onDelete: Cascade)
+  watermark    Watermark?   @relation(fields: [watermarkId], references: [id])
+
+  @@index([imageVersionId])
+  @@index([watermarkId])
+  @@map("image_version_watermarks")
+}
+
+model SubscriptionPlanFilter {
+  planId   Int @map("plan_id")
+  filterId Int @map("filter_id")
+
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id])
+  filter Filter           @relation(fields: [filterId], references: [id])
+
+  @@id([planId, filterId])
+  @@map("subscription_plan_filters")
+}
