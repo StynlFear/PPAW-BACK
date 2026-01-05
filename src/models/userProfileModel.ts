@@ -40,7 +40,7 @@ export async function createUserProfile(input: CreateUserProfileInput) {
   };
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx: { userProfile: { create: (arg0: { data: { email: string; role: "user" | "admin"; name: string | null; avatarUrl: string | null; id?: string | undefined; }; }) => any; }; subscriptionPlan: { findUnique: (arg0: { where: { id: number; } | { name: string; }; }) => any; }; subscription: { create: (arg0: { data: { userId: any; planId: any; status: string; currentPeriodStart: Date; currentPeriodEnd: Date; }; }) => any; }; }) => {
       const createdUser = await tx.userProfile.create({ data });
 
       // Assign Free plan by default.
@@ -78,7 +78,7 @@ export async function createUserProfile(input: CreateUserProfileInput) {
 
     // If the DB column has NOT NULL but no default yet, create again with an explicit UUID.
     if (code === "P2011" && !input.id) {
-      return await prisma.$transaction(async (tx) => {
+      return await prisma.$transaction(async (tx: { userProfile: { create: (arg0: { data: { id: `${string}-${string}-${string}-${string}-${string}`; email: string; role: "user" | "admin"; name: string | null; avatarUrl: string | null; }; }) => any; }; subscriptionPlan: { findUnique: (arg0: { where: { id: number; } | { name: string; }; }) => any; }; subscription: { create: (arg0: { data: { userId: any; planId: any; status: string; currentPeriodStart: Date; currentPeriodEnd: Date; }; }) => any; }; }) => {
         const createdUser = await tx.userProfile.create({
           data: { ...data, id: crypto.randomUUID() },
         });

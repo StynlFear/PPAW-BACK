@@ -93,3 +93,61 @@ export async function createImageForUpload(input: {
     },
   });
 }
+
+export async function listImagesForUser(userId: string) {
+  return prisma.image.findMany({
+    where: { userId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+}
+
+export async function listImageVersionsForUser(userId: string) {
+  return prisma.imageVersion.findMany({
+    where: {
+      image: {
+        userId,
+      },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+}
+
+export async function deleteImageVersionForImage(input: {
+  imageId: string;
+  versionId: string;
+}): Promise<{ id: string; editedUrl: string; originalUrl: string } | null> {
+  return prisma.$transaction(async (tx) => {
+    const version = await tx.imageVersion.findFirst({
+      where: { id: input.versionId, imageId: input.imageId },
+      select: {
+        id: true,
+        editedUrl: true,
+        image: {
+          select: {
+            originalUrl: true,
+          },
+        },
+      },
+    });
+
+    if (!version) return null;
+
+    // ImageFilter does not cascade in schema; remove links first.
+    await tx.imageFilter.deleteMany({
+      where: { imageVersionId: version.id },
+    });
+
+    // Best-effort cleanup (also cascades via schema for some rows).
+    await tx.imageVersionWatermark.deleteMany({
+      where: { imageVersionId: version.id },
+    });
+
+    await tx.imageVersion.delete({ where: { id: version.id } });
+
+    return {
+      id: version.id,
+      editedUrl: version.editedUrl,
+      originalUrl: version.image.originalUrl,
+    };
+  });
+}

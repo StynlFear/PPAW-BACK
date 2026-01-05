@@ -13,6 +13,9 @@ import {
   getWatermarkHistoryHandler,
 } from "../controllers/watermarkController";
 import {
+  deleteImageVersionHandler,
+  listUserImagesHandler,
+  listUserImageVersionsHandler,
   uploadImageHandler,
   uploadSingleFile,
 } from "../controllers/uploadController";
@@ -20,6 +23,12 @@ import {
 const router = express.Router();
 
 router.post("/upload", uploadSingleFile, uploadImageHandler);
+
+router.get("/:userId/versions", listUserImageVersionsHandler);
+
+router.delete("/:imageId/versions/:versionId", deleteImageVersionHandler);
+
+router.get("/:userId", listUserImagesHandler);
 
 router.post("/:imageId/filters", applyFilterHandler);
 

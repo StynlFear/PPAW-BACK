@@ -52,3 +52,11 @@ export async function setUserActivePlan(input: { userId: string; planId: number 
     return { ok: true as const, subscription: created };
   });
 }
+
+export async function listSubscriptionsForUser(userId: string) {
+  return prisma.subscription.findMany({
+    where: { userId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    include: { plan: true },
+  });
+}

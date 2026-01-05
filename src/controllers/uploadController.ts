@@ -11,9 +11,12 @@ import {
 } from "../config/supabase";
 import {
   createImageForUpload,
+  deleteImageVersionForImage,
   getUserCurrentMonthUsage,
   getUserProfileById,
   getUserUploadLimits,
+  listImageVersionsForUser,
+  listImagesForUser,
 } from "../models/uploadModel";
 import { isUuid } from "../utils/validators";
 
@@ -112,6 +115,107 @@ export async function uploadImageHandler(req: Request, res: Response) {
     // eslint-disable-next-line no-console
     console.error(err);
     await tryDeleteStorageObject({ bucket, objectPath: uploadedObjectPath });
+    return res.status(500).json({ error: "internal error" });
+  }
+}
+
+// List all images for a user
+// GET /images/:userId
+export async function listUserImagesHandler(req: Request, res: Response) {
+  try {
+    const userId = req.params.userId;
+    if (!isUuid(userId)) {
+      return res.status(400).json({ error: "userId must be a uuid" });
+    }
+
+    const user = await getUserProfileById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "user not found" });
+    }
+
+    const images = await listImagesForUser(userId);
+    return res.json(
+      images.map((img) => ({
+        ...img,
+        sizeBytes: img.sizeBytes === null ? null : img.sizeBytes?.toString(),
+      })),
+    );
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: "internal error" });
+  }
+}
+
+// List all image versions created for a user
+// GET /images/:userId/versions
+export async function listUserImageVersionsHandler(req: Request, res: Response) {
+  try {
+    const userId = req.params.userId;
+    if (!isUuid(userId)) {
+      return res.status(400).json({ error: "userId must be a uuid" });
+    }
+
+    const user = await getUserProfileById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "user not found" });
+    }
+
+    const versions = await listImageVersionsForUser(userId);
+    return res.json(versions);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: "internal error" });
+  }
+}
+
+function extractSupabasePublicObjectPath(inputUrl: string, bucket: string): string | null {
+  try {
+    const u = new URL(inputUrl);
+    const prefix = `/storage/v1/object/public/${bucket}/`;
+    if (!u.pathname.startsWith(prefix)) return null;
+    const objectPathEncoded = u.pathname.slice(prefix.length);
+    if (!objectPathEncoded) return null;
+    return decodeURIComponent(objectPathEncoded);
+  } catch {
+    return null;
+  }
+}
+
+// Delete an image version by imageId + versionId
+// DELETE /images/:imageId/versions/:versionId
+export async function deleteImageVersionHandler(req: Request, res: Response) {
+  const bucket = "ppaw";
+
+  try {
+    const imageId = req.params.imageId;
+    const versionId = req.params.versionId;
+
+    if (!isUuid(imageId)) {
+      return res.status(400).json({ error: "imageId must be a uuid" });
+    }
+    if (!isUuid(versionId)) {
+      return res.status(400).json({ error: "versionId must be a uuid" });
+    }
+
+    const deleted = await deleteImageVersionForImage({ imageId, versionId });
+    if (!deleted) {
+      return res.status(404).json({ error: "image version not found" });
+    }
+
+    // Best-effort: only delete storage object if it looks like a Supabase public URL
+    // and differs from the original upload object's path.
+    const editedObjectPath = extractSupabasePublicObjectPath(deleted.editedUrl, bucket);
+    const originalObjectPath = extractSupabasePublicObjectPath(deleted.originalUrl, bucket);
+    if (editedObjectPath && editedObjectPath !== originalObjectPath) {
+      await tryDeleteStorageObject({ bucket, objectPath: editedObjectPath });
+    }
+
+    return res.status(204).send();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
     return res.status(500).json({ error: "internal error" });
   }
 }

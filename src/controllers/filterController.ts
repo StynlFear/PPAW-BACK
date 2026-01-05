@@ -165,7 +165,7 @@ export async function applyFilterHandler(req: Request, res: Response) {
       Promise.all(filterIds.map((id) => canUserUseFilter({ userId: image.userId, filterId: id }))),
     ]);
 
-    const missingIdx = filters.findIndex((f) => !f);
+    const missingIdx = filters.findIndex((f: any) => !f);
     if (missingIdx !== -1) return res.status(404).json({ error: "filter not found" });
 
     if (allowedChecks.some((a) => !a.ok && a.reason === "NO_ACTIVE_SUBSCRIPTION")) {
