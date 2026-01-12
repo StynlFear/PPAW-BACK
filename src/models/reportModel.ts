@@ -447,7 +447,7 @@ export async function generateActivityReport(input: GenerateReportInput) {
           ${trendCfg.interval}::interval
         ) AS bucket_start
       ),
-      new_users AS (
+      new_users_by_bucket AS (
         SELECT date_trunc(${trendCfg.unit}, up.created_at) AS bucket_start,
                COUNT(*)::bigint AS new_users_count
         FROM user_profiles up
@@ -455,7 +455,7 @@ export async function generateActivityReport(input: GenerateReportInput) {
           AND up.created_at < ${range.end}::timestamptz
         GROUP BY 1
       ),
-      images AS (
+      images_by_bucket AS (
         SELECT date_trunc(${trendCfg.unit}, i.created_at) AS bucket_start,
                COUNT(*)::bigint AS images_uploaded_count,
                COALESCE(SUM(i.size_bytes), 0)::bigint AS images_uploaded_bytes
@@ -465,7 +465,7 @@ export async function generateActivityReport(input: GenerateReportInput) {
           ${targetUserId ? Prisma.sql`AND i.user_id = ${targetUserId}::uuid` : Prisma.empty}
         GROUP BY 1
       ),
-      versions AS (
+      versions_by_bucket AS (
         SELECT date_trunc(${trendCfg.unit}, iv.created_at) AS bucket_start,
                COUNT(*)::bigint AS image_versions_created_count
         FROM image_versions iv
@@ -475,7 +475,7 @@ export async function generateActivityReport(input: GenerateReportInput) {
           ${targetUserId ? Prisma.sql`AND i.user_id = ${targetUserId}::uuid` : Prisma.empty}
         GROUP BY 1
       ),
-      filters AS (
+      filters_by_bucket AS (
         SELECT date_trunc(${trendCfg.unit}, f.applied_at) AS bucket_start,
                COUNT(*)::bigint AS filters_applied_count
         FROM image_filters f
@@ -486,7 +486,7 @@ export async function generateActivityReport(input: GenerateReportInput) {
           ${targetUserId ? Prisma.sql`AND i.user_id = ${targetUserId}::uuid` : Prisma.empty}
         GROUP BY 1
       ),
-      watermarks AS (
+      watermarks_by_bucket AS (
         SELECT date_trunc(${trendCfg.unit}, w.applied_at) AS bucket_start,
                COUNT(*)::bigint AS watermarks_applied_count
         FROM image_version_watermarks w
@@ -497,7 +497,7 @@ export async function generateActivityReport(input: GenerateReportInput) {
           ${targetUserId ? Prisma.sql`AND i.user_id = ${targetUserId}::uuid` : Prisma.empty}
         GROUP BY 1
       ),
-      purchases AS (
+      purchases_by_bucket AS (
         SELECT date_trunc(${trendCfg.unit}, p.created_at) AS bucket_start,
                COUNT(*)::bigint AS purchases_paid_count,
                COALESCE(SUM(p.total_amount), 0) AS purchases_paid_amount_sum
@@ -508,7 +508,7 @@ export async function generateActivityReport(input: GenerateReportInput) {
           ${targetUserId ? Prisma.sql`AND p.user_id = ${targetUserId}::uuid` : Prisma.empty}
         GROUP BY 1
       ),
-      payments AS (
+      payments_by_bucket AS (
         SELECT date_trunc(${trendCfg.unit}, pm.created_at) AS bucket_start,
                COUNT(*)::bigint AS payments_count,
                COALESCE(SUM(pm.amount), 0) AS payments_amount_sum
@@ -531,13 +531,13 @@ export async function generateActivityReport(input: GenerateReportInput) {
         COALESCE(pm.payments_count, 0) AS payments_count,
         COALESCE(pm.payments_amount_sum, 0) AS payments_amount_sum
       FROM buckets b
-      LEFT JOIN images img USING (bucket_start)
-      LEFT JOIN versions v USING (bucket_start)
-      LEFT JOIN filters fl USING (bucket_start)
-      LEFT JOIN watermarks wm USING (bucket_start)
-      LEFT JOIN purchases pc USING (bucket_start)
-      LEFT JOIN payments pm USING (bucket_start)
-      ${scope === "global" ? Prisma.sql`LEFT JOIN new_users nu USING (bucket_start)` : Prisma.empty}
+      LEFT JOIN images_by_bucket img USING (bucket_start)
+      LEFT JOIN versions_by_bucket v USING (bucket_start)
+      LEFT JOIN filters_by_bucket fl USING (bucket_start)
+      LEFT JOIN watermarks_by_bucket wm USING (bucket_start)
+      LEFT JOIN purchases_by_bucket pc USING (bucket_start)
+      LEFT JOIN payments_by_bucket pm USING (bucket_start)
+      ${scope === "global" ? Prisma.sql`LEFT JOIN new_users_by_bucket nu USING (bucket_start)` : Prisma.empty}
       ORDER BY b.bucket_start ASC;
     `),
 
