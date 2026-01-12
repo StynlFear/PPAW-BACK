@@ -25,6 +25,7 @@ tags:
   - name: Plans
   - name: Watermarks
   - name: Reports
+  - name: Payments
 
 paths:
   /me:
@@ -1404,7 +1405,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  - name: Payments
 
 components:
   schemas:
