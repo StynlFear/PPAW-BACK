@@ -1334,6 +1334,78 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /payments/checkout:
+    post:
+      tags: [Payments]
+      summary: Fake card checkout (demo)
+      description: |
+        Demo-only payment endpoint for university project use.
+        It never contacts a payment provider and never stores raw card data.
+        On success, it records a Payment and (optionally) activates the requested subscription plan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FakeCheckoutRequest'
+            examples:
+              successPlan:
+                value:
+                  userId: 11111111-1111-4111-8111-111111111111
+                  planId: 2
+                  currency: USD
+                  card:
+                    firstName: Test
+                    lastName: User
+                    number: '4242 4242 4242 4242'
+                    expMonth: 12
+                    expYear: 30
+                    cvc: '123'
+              declined:
+                value:
+                  userId: 11111111-1111-4111-8111-111111111111
+                  planId: 2
+                  currency: USD
+                  card:
+                    firstName: Test
+                    lastName: User
+                    number: '4000 0000 0000 0002'
+                    expMonth: 12
+                    expYear: 30
+                    cvc: '123'
+      responses:
+        '201':
+          description: Payment succeeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FakeCheckoutSuccessResponse'
+        '402':
+          description: Payment failed/declined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FakeCheckoutFailureResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User/plan not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  - name: Payments
+
 components:
   schemas:
     GenerateReportRequest:
@@ -1408,6 +1480,100 @@ components:
       properties:
         error:
           type: string
+
+    FakeCheckoutCard:
+      type: object
+      required: [firstName, lastName, number, expMonth, expYear, cvc]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        number:
+          type: string
+          description: Card number (demo only). Not stored.
+        expMonth:
+          type: integer
+          minimum: 1
+          maximum: 12
+        expYear:
+          type: integer
+          description: 2-digit or 4-digit year
+        cvc:
+          type: string
+          description: CVC/CVV (demo only). Not stored.
+
+    FakeCheckoutRequest:
+      type: object
+      required: [userId, card]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        planId:
+          type: integer
+          description: Optional. If provided, activates this plan on successful payment.
+        amount:
+          oneOf:
+            - type: string
+            - type: number
+          description: Optional override. If omitted and planId provided, uses plan price.
+        currency:
+          type: string
+          example: USD
+        card:
+          $ref: '#/components/schemas/FakeCheckoutCard'
+
+    FakeCheckoutPayment:
+      type: object
+      required: [id, status, amount, currency]
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+          example: succeeded
+        amount:
+          type: string
+          description: Decimal serialized as string
+        currency:
+          type: string
+        method:
+          type: string
+          nullable: true
+          example: card:visa:****4242
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    FakeCheckoutSuccessResponse:
+      type: object
+      required: [ok, payment]
+      properties:
+        ok:
+          type: boolean
+          enum: [true]
+        payment:
+          $ref: '#/components/schemas/FakeCheckoutPayment'
+        subscription:
+          nullable: true
+          oneOf:
+            - type: object
+            - type: 'null'
+
+    FakeCheckoutFailureResponse:
+      type: object
+      required: [ok, reason, payment]
+      properties:
+        ok:
+          type: boolean
+          enum: [false]
+        reason:
+          type: string
+          example: card_declined
+        payment:
+          $ref: '#/components/schemas/FakeCheckoutPayment'
 
     CreateUserRequest:
       type: object

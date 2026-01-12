@@ -9,6 +9,7 @@ import plansRouter from "./plans";
 import usersRouter from "./users";
 import watermarksRouter from "./watermarks";
 import reportsRouter from "./reports";
+import paymentsRouter from "./payments";
 
 const router = express.Router();
 
@@ -20,5 +21,6 @@ router.use("/filters", filtersRouter);
 router.use("/plans", plansRouter);
 router.use("/watermarks", watermarksRouter);
 router.use("/reports", reportsRouter);
+router.use("/payments", paymentsRouter);
 
 export default router;
